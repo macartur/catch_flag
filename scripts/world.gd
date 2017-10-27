@@ -35,7 +35,7 @@ class Player:
 		self.change_state(1)
 		self.speed = 8
 		self.last_update = self.get_movement()
-		self.influence_number = 300
+		self.influence_number = 2
 
 	func change_state(state=1):
 		var sprite = self.object.get_node('sprite')
@@ -46,22 +46,28 @@ class Player:
 			texture = green_states[state]
 		sprite.set_texture(texture)
 
-	func type():
-		return 'Player'
-
 	func delete(map):
 		map.object.remove_child(self.object)
 		self.object.free()
 	
+	func get_influence_value(x,y,next_x,next_y):
+		return self.influence_number/(1+abs(next_x - x)+abs(next_y - y))
+	
 	func add_influence(map, x, y):
 		for next_x in range(map.width):                                             
-			for next_y in range(map.height):                                          
-				map.influence_map[next_x][next_y] += self.influence_number/(1+abs(next_x - x)+abs(next_y - y))^2
+			for next_y in range(map.height):          
+				if self.team == 1:
+					map.ia.blue_influence[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y)
+				else:
+					map.ia.green_influence[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y)
 
 	func remove_influence(map, x , y):
 		for next_x in range(map.width):                                             
-			for next_y in range(map.height):                                          
-				map.influence_map[next_x][next_y] -= self.influence_number/(1+abs(next_x - x)+abs(next_y - y))^2
+			for next_y in range(map.height):            
+				if self.team == 1:                              
+					map.ia.blue_influence[next_x][next_y] -= self.get_influence_value(x,y, next_x,next_y)
+				else:
+					map.ia.green_influence[next_x][next_y] -= self.get_influence_value(x,y, next_x,next_y)
 
 	func catch_flag(map, x, y):
 		if map.ia.safe_area[x][y] != 4:
@@ -70,25 +76,128 @@ class Player:
 		if self.team == 1 and x > 20 or self.team == 2 and x < 20:
 			self.change_state(3)
 			self.flag = true
+			
+	func freeze(map,x,y):
+		self.remove_influence(map,x,y)
+		self.influence = -1*self.influence_number
+		self.add_influence(map,x,y)
+		self.frozen = true
 
-
-
+	func unfreeze(map,x,y):
+		self.remove_influence(map,x,y)
+		self.influence = -1* self.influence_number
+		self.add_influence(map,x,y)
+		self.frozen = false
 
 	func update(delta, map, x, y):
 		self.last_update -= delta
 		if self.last_update > 0.0 or self.frozen == true:
 			return
 		self.last_update = self.get_movement()
+
+		var enemies = map.ia.blue_influence
+		var allied = map.ia.green_influence
+		var team_area = false
+
+		if self.team == 1:
+			enemies = map.ia.green_influence
+			allied =  map.ia.blue_influence
+
+		if (x < 20 and self.team == 1) or (x > 20 and self.team == 2):
+			team_area = true
+
+		# decision tree
+		if enemies[x][y] > 0: # 2 - Search for enemy unfrozen closer
+			if team_area == true: # 4 - allied field
+				print(1)
+				self.go_to_enemy_closer(map,x,y, enemies) # go to the enemy closer
+			else:
+				print(2)
+				self.go_to_allied_flag(map, x, y, enemies) # go to the safe field
+		else:
+			if allied[x][y] < 0: # 1 - search for allied frozen closer
+				pass
+				print(3)
+			else:
+				if self.flag == true: # 5 - I have a flag
+					print(4)
+					self.go_to_allied_flag(map,x,y, enemies)# go to store a flag
+				else:  # 5 - I haven't a flag
+					print(5)
+					self.go_to_catch_a_flag(map,x,y, enemies)# go to catch a flag	
+
+	func go_to_catch_a_flag(map,x,y, enemies):
+		# try to go to the team flag
 		var tmp_x = x
 		var tmp_y = y
+		var best_influence = map.ia.movement_map[x][y]
+		var enemy_closer = enemies[x][y] 
+		for next_x in [x-1,x,x+1]: 
+			for next_y in [y-1,y,y+1]:
+				if  map.allowed_position(next_x, next_y):
+					continue
+				var obj = map.board[next_x][next_y]
+				if typeof(obj) == TYPE_INT:
+					if (self.team == 1 and map.ia.movement_map[next_x][next_y] <= best_influence) or\
+					   (self.team == 2 and map.ia.movement_map[next_x][next_y] >= best_influence) and\
+					   enemies[next_x][next_y] <= enemy_closer: 
+						best_influence = map.ia.movement_map[next_x][next_y]
+						tmp_x = next_x
+						tmp_y = next_y
+						enemy_closer = enemies[next_x][next_y]
+
+		if tmp_x != x and tmp_y != y:
+			map.move_object(x, y, tmp_x, tmp_y)
+
+	func go_to_allied_flag(map, x, y, enemies):
+		# try to go to the team flag
+		var tmp_x = x
+		var tmp_y = y
+		var best_influence = map.ia.movement_map[x][y]
+		var enemy_closer = enemies[x][y] 
+		for next_x in [x-1,x,x+1]: 
+			for next_y in [y-1,y,y+1]:
+				if  map.allowed_position(next_x, next_y):
+					continue
+				var obj = map.board[next_x][next_y]
+				if typeof(obj) != TYPE_INT:
+					if (self.team == 1 and map.ia.movement_map[next_x][next_y] >= best_influence) or\
+					   (self.team == 2 and map.ia.movement_map[next_x][next_y] <= best_influence) and\
+					   enemies[next_x][next_y] <= enemy_closer: 
+						best_influence = map.ia.movement_map[next_x][next_y]
+						tmp_x = next_x
+						tmp_y = next_y
+						enemy_closer = enemies[next_x][next_y]
+
+		if tmp_x != x and tmp_y != y:
+			map.move_object(x, y, tmp_x, tmp_y)
+
+	func go_to_enemy_closer(map,x,y, enemies):
+		var tmp_x = x
+		var tmp_y = y
+		var best_influence = enemies[x][y]
+		var done = false
+
+		for next_x in [x-1,x,x+1]: 
+			for next_y in [y-1,y,y+1]:
+				if map.allowed_position(next_x, next_y):
+					continue
+				var obj = map.board[next_x][next_y]
+				if typeof(obj) != TYPE_INT and obj.team != self.team and obj.frozen == false:  
+					# freeze only one enimy closer
+					obj.freeze()
+					done = true
+					break
+
+				elif enemies[next_x][next_y] >= best_influence:
+					best_influence = enemies[next_x][next_y]
+					tmp_x = next_x
+					tmp_y = next_y
+
+		if done == false and tmp_x != x and tmp_y != y:
+			map.move_object(x, y, tmp_x, tmp_y)
 
 
-
-
-
-
-		print(self.last_update)
-		
 
 	func get_movement():
 		randomize()
@@ -97,6 +206,8 @@ class Player:
 class IA:
 	var movement_map
 	var safe_area
+	var blue_influence
+	var green_influence
 	var width
 	var height
 	var map
@@ -107,6 +218,8 @@ class IA:
 		self.height = height
 		self.movement_map =  self._empty_map()
 		self.build_movement_map()
+		self.blue_influence =  self._empty_map()
+		self.green_influence =  self._empty_map()
 		self.safe_area = self._empty_map()
 		self.build_safe_area()
 
@@ -128,15 +241,17 @@ class IA:
 	func build_safe_area():
 		#  1 - blue time
 		#  2 - green time
-		#  3 - safe area
-		#  4 - flag area
+		#  3 - blue safe area
+		#  4 - green safe area
+		#  5 - blue flag area
+		#  6 - green flag area
 		for x in range(self.width):
 			for y in range(self.height):
 				var value  = 0
 				if x < 20:
 					if x < 9 and y >= 4 and y <= 25:
 						if x < 3 and y >= 11 and y <= 16:
-							value = 4
+							value = 5   
 						else:
 							value = 3
 					else:
@@ -144,9 +259,9 @@ class IA:
 				else:
 					if (x > 30 and y >= 4 and y <= 25):
 						if x > 36 and y >= 11 and y <= 16:
-							value = 4
+							value = 6
 						else:
-							value = 3
+							value = 4
 					else:
 						value = 2
 				self.safe_area[x][y] = value
@@ -190,17 +305,21 @@ class Field:
 			map.append(columns)
 		return map
 
+	func allowed_position(x,y):
+		return (x >= self.width or y >= self.height or x < 0 or y < 0)
 	func set_object(instance, x, y):
 		if typeof(self.board[x][y]) != TYPE_INT:
 			return
 		self.object.add_child(instance.object)
 		self.board[x][y] = instance
+		instance.add_influence(self, x, y)
 		instance.object.set_pos(Vector2(self.tile_size*x, self.tile_size*y))
 
 	func remove_object(x,y):
 		var instance = self.board[x][y]
 		if typeof(instance) == TYPE_INT:
 			return
+		instance.remove_influence(x,y)
 		self.board[x][y] = 0
 		instance.delete(self)
 
@@ -208,17 +327,19 @@ class Field:
 		var tmp = self.board[x][y]
 		if typeof(tmp) == TYPE_INT:
 			return
+		tmp.remove_influence(self, x,y)
 		self.board[next_x][next_y] = tmp
+		tmp.add_influence(self, x, y)
 		self.board[x][y] = 0
 		tmp.object.set_pos(Vector2(self.tile_size*next_x, self.tile_size*next_y))
 
 	func create_players():
-		
+#		
 		for x in [5, 15]:
 			for y in [3, 26]:
 				var p1 = Player.new(1)
 				self.set_object(p1, x, y)
-		
+#		
 		for x in [24, 34]:
 			for y in [3, 26]:
 				var p2 = Player.new(2)
