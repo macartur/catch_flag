@@ -33,9 +33,9 @@ class Player:
 		self.team = team
 		self.object = agent.instance()
 		self.change_state(1)
-		self.speed = 10
+		self.speed = 15
 		self.last_update = self.get_movement()
-		self.influence_number = 1000
+		self.influence_number = 5
 		
 	func change_state(state=1):
 		var sprite = self.object.get_node('sprite')
@@ -54,35 +54,45 @@ class Player:
 		return self.influence_number/(1+abs(next_x - x)+abs(next_y - y))
 
 	func add_influence(map, x, y):
-		self._handle_influence(map,x,y, true)
+		self._handle_influence(map,x,y, 1)
 
 	func remove_influence(map, x , y):
-		self._handle_influence(map,x,y, false)
+		self._handle_influence(map,x,y, -1)
 
 	func _handle_influence(map, x, y, add):
-		for next_x in range(map.width):                                             
-			for next_y in range(map.height):            
+		for next_x in range(map.width):
+			for next_y in range(map.height):
 				if self.team == 1:
 					if self.frozen:
 						map.ia.influence.blue_frozen[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y) * add
+					elif self.flag:
+						map.ia.influence.blue_with_flag[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y) * add
 					else:
 						map.ia.influence.blue[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y) * add
 				else:
 					if self.frozen:
 						map.ia.influence.green_frozen[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y) * add
+					elif self.flag:
+						map.ia.influence.green_with_flag[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y) * add
 					else:
 						map.ia.influence.green[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y) * add
 
 	func catch_flag(map, x, y):
-		if map.ia.safe_area[x][y] != 4:
-			return
-
-		if self.team == 1 and x > 20 or self.team == 2 and x < 20:
+		if self.flag == false and \
+			((map.ia.safe_area[x][y] == 6 and self.team == 1) or 
+			(map.ia.safe_area[x][y] == 5 and self.team == 2)):
 			self.change_state(3)
+			self.remove_influence(map,x,y)
 			self.flag = true
+			self.add_influence(map,x,y)
+			return true
+		return false
 
 	func freeze(map,x,y):
+		if self.frozen:
+			return
 		self.remove_influence(map,x,y)
+		self.flag = false
 		self.frozen = true
 		self.add_influence(map,x,y)
 		self.change_state(2)
@@ -97,103 +107,101 @@ class Player:
 		self.last_update -= delta
 		if self.last_update > 0.0 or self.frozen == true:
 			return
+
 		self.last_update = self.get_movement()
 		var options = map.ia.get_options(self)
 		var team_area = map.ia.team_safe_area(self, x, y)
-		
-		
-		self.go_to_enemy_closer(map,x,y,options)
-		
-		
-		# decision tree
-#		if options.enemies[x][y] > 0: # 2 - Search for enemy unfrozen closer
-#			if team_area == true: # 4 - allied field
-#				print(1)
-#				self.go_to_enemy_closer(map,x,y,options) # go to the enemy closer
-#			else:
-#				print(2)
-#				self.go_to_allied_field(map, x, y,options) # go to the safe field
-#		else:
-#			if options.allied_frozen[x][y] > 0: # 1 - search for allied frozen closer
-#				print(3)
-#				self.go_to_allied_frozen_closer(map, x, y, options)
-#			else:
-#				if self.flag == true: # 5 - I have a flag
-#					print(4)
-#					self.go_to_allied_field(map,x,y, options)# go to store a flag
-#				else:  # 5 - I haven't a flag
-#					print(5)
-#					self.go_to_catch_a_flag(map,x,y,  options)# go to catch a flag	
+		# move to flag
+#		self._handle_movement(map, x, y, options.enemies,false, false)
+#		self._go_freeze_enemy(map, x, y, options.enemies)
+#		self._go_unfreeze_allied(map, x, y, options.allied_frozen)
+		if (self.catch_flag(map,x,y) == true):
+			return
 
-	func go_to_catch_a_flag(map, x, y, options): 
-		self._handle_movement(map, x, y, options.enemies, false, true, true)
+		if team_area == true and options.enemies_with_flag[x][y] > 0:
+			print(1, options.enemies_with_flag[x])
+			self._go_freeze_enemy(map, x, y, options.enemies_with_flag)
+		elif self.flag == false:
+			print(2)
+			self._handle_movement(map, x, y, options.enemies,false, true)  # go catch flag
+		else:
+			print(3)
+			self._handle_movement(map, x, y, options.enemies,false, false) # go store flag
 
-	func go_to_allied_field(map, x, y, options):
-		self._handle_movement(map, x, y, options.enemies, false, true, false)
-		
-	func go_to_enemy_closer(map, x, y, options):
-		if not self.freeze_enemies(map, x, y):
-			self._handle_movement(map, x, y, options.enemies, true, false, false)
-
-	func go_to_allied_frozen_closer(map, x, y, options):
-		if not self.unfreeze_allies(map,x,y):
-			self._handle_movement(map, x, y, options.allied_frozen, true, false, false)
-
-	func _handle_movement(map, x, y, influence_map, closer, movement_influence, flag_direction):
+	
+	func _go_unfreeze_allied(map, x, y, allied_frozen):
 		var tmp_x = x
 		var tmp_y = y
-		var best_influence = map.ia.movement_map[x][y]
-		var current_influence_value = influence_map[x][y]
-		for next_x in [x-1,x,x+1]: 
+		for next_x in  [x-1,x,x+1]:
 			for next_y in [y-1,y,y+1]:
-				if  map.not_allowed(next_x, next_y):
+				if map.not_allowed(next_x, next_y):
 					continue
 				var obj = map.board[next_x][next_y]
-				if (typeof(obj) == TYPE_INT):
-					var c1 = true
-					var c2= true
-					var c3 = true
-					var c4 = true
-					c1 = self.team == 1 and map.ia.movement_map[next_x][next_y] < best_influence
-					c2 = self.team == 2 and map.ia.movement_map[next_x][next_y] > best_influence
-					c3 = closer==false and influence_map[next_x][next_y] <= current_influence_value
-					c4 = closer==true and influence_map[next_x][next_y] > current_influence_value
-					if c1 or c2:
-						if c3 or c4:
-							tmp_x = next_x
-							tmp_y = next_y
-							best_influence = map.ia.movement_map[next_x][next_y]
-							current_influence_value = influence_map[next_x][next_y]
-
-		if typeof(map.board[tmp_x][tmp_y]) == TYPE_INT:
-			map.move_object(x, y, tmp_x, tmp_y)
-
-	func freeze_enemies(map, x, y):
-		var team_safe_area = map.ia.team_safe_area(self, x, y)
-		for next_x in [x-1,x,x+1]: 
-			for next_y in [y-1,y,y+1]:
-				if  map.not_allowed(next_x, next_y):
-					continue
-				var obj = map.board[next_x][next_y]
-				if (typeof(obj) != TYPE_INT):
-					var obj_safe_area = map.ia.team_safe_area(obj, x, y)
-					if self.team != obj.team and team_safe_area == true and obj_safe_area == false and obj.frozen == false:
-						obj.freeze(map, next_x, next_y)
-						return true
-		return false
-		
-	func unfreeze_allies(map, x, y):
-		var team_safe_area = map.ia.team_safe_area(self, x, y)
-		for next_x in [x-1,x,x+1]: 
-			for next_y in [y-1,y,y+1]:
-				if  map.not_allowed(next_x, next_y):
-					continue
-				var obj = map.board[next_x][next_y]
-				if (typeof(obj) != TYPE_INT):
+				if typeof(obj) != TYPE_INT:
 					if self.team == obj.team and obj.frozen:
 						obj.unfreeze(map, next_x, next_y)
-						return true
-		return false
+						return
+				elif self.closer_condition(allied_frozen, next_x, next_y, tmp_x, tmp_y, true):
+					tmp_x = next_x
+					tmp_y = next_y
+					
+					
+		if tmp_x != x or tmp_y != y:
+			map.move_object(x, y, tmp_x, tmp_y)
+
+	func _go_freeze_enemy(map, x, y, enemies):
+		var tmp_x = x
+		var tmp_y = y
+		for next_x in  [x-1,x,x+1]:
+			for next_y in [y-1,y,y+1]:
+				if map.not_allowed(next_x, next_y):
+					continue
+				var obj = map.board[next_x][next_y]
+				if typeof(obj) == TYPE_INT:
+					if self.closer_condition(enemies, next_x, next_y, tmp_x, tmp_y, true):
+						tmp_x = next_x
+						tmp_y = next_y
+				elif self.team != obj.team and obj.frozen == false and \
+				     (obj.team == 1 and next_x >= 20 and map.ia.safe_area[next_x][next_y] == 2) or\
+		   		     (obj.team == 2 and next_x < 20 and map.ia.safe_area[next_x][next_y] == 1):
+						obj.freeze(map, x, y)
+						return 
+
+		if tmp_x != x or tmp_y != y:
+			map.move_object(x, y, tmp_x, tmp_y)
+
+	func _handle_movement(map, x, y, influence, closer, catch_flag):
+		var tmp_x = x
+		var tmp_y = y
+		for next_x in  [x-1,x,x+1]:
+			for next_y in [y-1,y,y+1]:
+				if map.not_allowed(next_x, next_y):
+					continue
+				var obj = map.board[next_x][next_y]
+				if typeof(obj) == TYPE_INT:
+					if self.movement_condition(map,next_x, next_y, tmp_x, tmp_y, catch_flag) and \
+					   self.closer_condition(influence, next_x,next_y, tmp_x, tmp_y, closer):
+						tmp_x = next_x
+						tmp_y = next_y
+		if tmp_x != x or tmp_y != y:
+			map.move_object(x, y, tmp_x, tmp_y)
+
+	func movement_condition(map, next_x, next_y, tmp_x, tmp_y, catch_flag):
+		var condition_1
+		var condition_2
+		if catch_flag:
+			condition_1 = map.ia.movement_map[next_x][next_y] <= map.ia.movement_map[tmp_x][tmp_y] and self.team == 1
+			condition_2 = map.ia.movement_map[next_x][next_y] >= map.ia.movement_map[tmp_x][tmp_y] and self.team == 2
+		else:
+			condition_1 = map.ia.movement_map[next_x][next_y] >= map.ia.movement_map[tmp_x][tmp_y] and self.team == 1
+			condition_2 = map.ia.movement_map[next_x][next_y] <= map.ia.movement_map[tmp_x][tmp_y] and self.team == 2
+		return condition_1 or condition_2
+
+	func closer_condition(influence, next_x,next_y, tmp_x, tmp_y, closer):
+		if closer == false:
+			return influence[next_x][next_y] <= influence[tmp_x][tmp_y]
+		else:
+			return influence[next_x][next_y] >= influence[tmp_x][tmp_y]
 
 	func get_movement():
 		randomize()
@@ -216,28 +224,30 @@ class IA:
 		self.build_safe_area()
 		self.build_movement_map()
 		self.influence = { }
-		for key in ['green', 'blue', 'blue_frozen', 'green_frozen']:
+		for key in ['green', 'blue', 'blue_frozen', 'green_frozen', 'blue_with_flag', 'green_with_flag']:
 			self.influence[key] = self._empty_map()
 
 	func get_options(player=null):
 		var options = {}
 		if player.team == 1:
 			options.enemies = self.influence.green
+			options.enemies_with_flag = self.influence.green_with_flag
 			options.allied_frozen = self.influence.blue_frozen
 		else:
 			options.enemies = self.influence.blue
+			options.enemies_with_flag = self.influence.blue_with_flag
 			options.allied_frozen = self.influence.green_frozen
 		return options
 
 	func build_movement_map():
-		self.add_influence(1000, 0, 13)
-		self.add_influence(-1000, 39, 13)
+		self.add_influence(10000, 0, 13)
+		self.add_influence(-10000, 39, 13)
 
 	func add_influence(influence_number, x, y):
 		for next_x in range(self.map.width):                                             
 			for next_y in range(self.map.height):                                          
-				self.movement_map[next_x][next_y] += influence_number/(1+abs(next_x - x)+abs(next_y - y))
-				
+				self.movement_map[next_x][next_y] += influence_number/(1+abs(next_x - x)+abs(next_y - y))^2
+
 	func team_safe_area(player,x,y):
 		if (x < 20 and player.team == 1) or (x > 20 and player.team == 2):
 			return true
@@ -297,7 +307,7 @@ class Field:
 		self.board = self._empty_map()
 		self.ia = IA.new(width, height, self)
 		self.object = object
-		self.update_time  = 0.5
+		self.update_time  = 0.2
 		self.last_update = self.update_time
 		self.create_players()
 
@@ -333,10 +343,10 @@ class Field:
 		var tmp = self.board[x][y]
 		if typeof(tmp) == TYPE_INT:
 			return
-		tmp.remove_influence(self, x,y)
+		tmp.remove_influence(self,x, y)
 		self.board[next_x][next_y] = tmp
-		tmp.add_influence(self, x, y)
 		self.board[x][y] = 0
+		tmp.add_influence(self, next_x, next_y)
 		tmp.object.set_pos(Vector2(self.tile_size*next_x, self.tile_size*next_y))
 
 	func create_players():
@@ -349,14 +359,13 @@ class Field:
 			for y in [3, 26]:
 				var p2 = Player.new(2)
 				self.set_object(p2, x,y)
-				p2.freeze(self,x,y)
-
+#
 		var p1 = Player.new(1)
 		self.set_object(p1, 15, 13)
-
+#
 		var p2 = Player.new(2)
-		self.set_object(p2, 24,13)
-
+		self.set_object(p2, 24,10)
+		
 	func update(delta):
 		self.last_update -= delta
 		if self.last_update > 0.0 :
