@@ -12,4 +12,189 @@ script/script = ExtResource( 1 )
 texture = ExtResource( 2 )
 centered = false
 
+[node name="menu" type="Control" parent="."]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 0.0
+margin/top = 0.0
+margin/right = 40.0
+margin/bottom = 40.0
+
+[node name="Panel" type="Panel" parent="menu"]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 796.0
+margin/top = 2.0
+margin/right = 1023.0
+margin/bottom = 601.0
+
+[node name="start" type="Button" parent="menu"]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 800.0
+margin/top = 150.0
+margin/right = 1020.0
+margin/bottom = 170.0
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+text = "Start"
+flat = false
+
+[node name="stop" type="Button" parent="menu"]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 800.0
+margin/top = 173.0
+margin/right = 1020.0
+margin/bottom = 193.0
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+text = "Stop"
+flat = false
+
+[node name="status" type="TextEdit" parent="menu"]
+
+focus/ignore_mouse = false
+focus/stop_mouse = false
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 817.0
+margin/top = 44.0
+margin/right = 996.0
+margin/bottom = 69.0
+syntax_highlighting = false
+show_line_numbers = false
+highlight_all_occurrences = false
+caret/block_caret = false
+caret/caret_blink = false
+caret/caret_blink_speed = 0.65
+
+[node name="positions" type="Button" parent="menu"]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 800.0
+margin/top = 197.0
+margin/right = 1020.0
+margin/bottom = 217.0
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+text = "Create Default Players"
+flat = false
+
+[node name="Label" type="Label" parent="menu"]
+
+focus/ignore_mouse = true
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 0
+margin/left = 870.0
+margin/top = 23.0
+margin/right = 939.0
+margin/bottom = 43.0
+text = "Catch Flag"
+percent_visible = 1.0
+lines_skipped = 0
+max_lines_visible = -1
+
+[node name="reset" type="Button" parent="menu"]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 800.0
+margin/top = 220.0
+margin/right = 1020.0
+margin/bottom = 240.0
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+text = "Reset"
+flat = false
+
+[node name="edit" type="Button" parent="menu"]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 800.0
+margin/top = 268.0
+margin/right = 1020.0
+margin/bottom = 288.0
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+text = "Edit Mode"
+flat = false
+
+[node name="option" type="OptionButton" parent="menu"]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 800.0
+margin/top = 245.0
+margin/right = 1020.0
+margin/bottom = 265.0
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+flat = false
+align = 0
+selected = -1
+items = [  ]
+
+[node name="score" type="Label" parent="menu"]
+
+focus/ignore_mouse = true
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 0
+margin/left = 847.0
+margin/top = 88.0
+margin/right = 1003.0
+margin/bottom = 119.0
+text = "Blue 0  -  Green 0\n"
+percent_visible = 1.0
+lines_skipped = 0
+max_lines_visible = -1
+
+[node name="max_flags" type="OptionButton" parent="menu"]
+
+focus/ignore_mouse = false
+focus/stop_mouse = true
+size_flags/horizontal = 2
+size_flags/vertical = 2
+margin/left = 800.0
+margin/top = 127.0
+margin/right = 1020.0
+margin/bottom = 147.0
+toggle_mode = false
+enabled_focus_mode = 2
+shortcut = null
+flat = false
+align = 0
+selected = -1
+items = [  ]
+
 

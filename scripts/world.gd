@@ -33,9 +33,9 @@ class Player:
 		self.team = team
 		self.object = agent.instance()
 		self.change_state(1)
-		self.speed = 15
+		self.speed = 20
 		self.last_update = self.get_movement()
-		self.influence_number = 10
+		self.influence_number = 500
 		
 	func change_state(state=1):
 		var sprite = self.object.get_node('sprite')
@@ -62,23 +62,36 @@ class Player:
 	func _handle_influence(map, x, y, add):
 		for next_x in range(map.width):
 			for next_y in range(map.height):
-				if self.team == 1:
+				var value = self.get_influence_value(x,y, next_x,next_y) * add
+				if self.team == 1 and map.ia.safe_area[x][y] == 2:
 					if self.frozen:
-						map.ia.influence.blue_frozen[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y) * add
-					elif self.flag:
-						map.ia.influence.blue_with_flag[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y) * add
+						map.ia.influence.blue_frozen[next_x][next_y] += value
 					else:
-						map.ia.influence.blue[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y) * add
-				else:
+						map.ia.influence.blue[next_x][next_y] += value
+					if self.flag:
+						map.ia.influence.blue_with_flag[next_x][next_y] += value
+				elif self.team == 2 and map.ia.safe_area[x][y] == 1:
 					if self.frozen:
-						map.ia.influence.green_frozen[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y) * add
-					elif self.flag:
-						map.ia.influence.green_with_flag[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y) * add
+						map.ia.influence.green_frozen[next_x][next_y] += value
 					else:
-						map.ia.influence.green[next_x][next_y] += self.get_influence_value(x,y, next_x,next_y) * add
+						map.ia.influence.green[next_x][next_y] += value
+					if self.flag:
+						map.ia.influence.green_with_flag[next_x][next_y] += value
+
+	func store_flag(map, x, y):
+		if self.flag == true and \
+		   ((map.ia.safe_area[x][y] == 5 and self.team == 1) or (map.ia.safe_area[x][y] == 6 and self.team == 2)):
+			self.remove_influence(map,x,y)
+			self.flag = false
+			self.add_influence(map,x,y)
+			self.change_state(1)
+			map.flags[self.team] += 1
+			return true
+		return false
 
 	func catch_flag(map, x, y):
-		if self.flag == false and ((map.ia.safe_area[x][y] == 6 and self.team == 1) or (map.ia.safe_area[x][y] == 5 and self.team == 2)):
+		if self.flag == false and \
+		   ((map.ia.safe_area[x][y] == 6 and self.team == 1) or (map.ia.safe_area[x][y] == 5 and self.team == 2)):
 			self.remove_influence(map,x,y)
 			self.flag = true
 			self.add_influence(map,x,y)
@@ -108,24 +121,28 @@ class Player:
 
 		self.last_update = self.get_movement()
 		var options = map.ia.get_options(self)
-		var team_area = map.ia.team_safe_area(self, x, y)
-		# move to flag
-#		self._handle_movement(map, x, y, options.enemies,false, false)
-#		self._go_freeze_enemy(map, x, y, options.enemies)
-#		self._go_unfreeze_allied(map, x, y, options.allied_frozen)
+		var team_area = (x < 20 and self.team == 1) or (x >= 20 and self.team == 2)
+
 		if (self.catch_flag(map,x,y) == true):
 			return
 
-		if team_area == true and options.enemies_with_flag[x][y] > 0:
-			print(1, options.enemies_with_flag[x])
-			self._go_freeze_enemy(map, x, y, options.enemies_with_flag)
+		if (self.store_flag(map, x, y) == true):
 			return
-		self._handle_movement(map, x, y, options.enemies, false, !self.flag)  # go catch flag
-		
-#		self._go_freeze_enemy(map, x, y, options.enemies)
-#		print(options.enemies[x])
 
-
+		if team_area == true:
+			if options.enemies_with_flag[x][y] > 0:
+				self._go_freeze_enemy(map, x, y, options.enemies_with_flag)
+			elif options.enemies[x][y] > 0:
+				self._go_freeze_enemy(map, x, y, options.enemies)
+			elif options.allied_frozen[x][y] > 0 and options.enemies[x][y] == 0:
+				self._go_unfreeze_allied(map, x,y, options.allied_frozen)
+			else:
+				self._handle_movement(map, x, y, options.enemies, false, !self.flag)
+		else:
+			if options.allied_frozen[x][y] > 0 and options.enemies[x][y] == 0:
+				self._go_unfreeze_allied(map, x,y, options.allied_frozen)
+			else:
+				self._handle_movement(map, x, y, options.enemies, false, !self.flag)
 
 	func _go_unfreeze_allied(map, x, y, allied_frozen):
 		var tmp_x = x
@@ -158,12 +175,11 @@ class Player:
 						tmp_x = next_x
 						tmp_y = next_y
 				elif (self.team != obj.team) and (obj.frozen == false) and \
-				     ((obj.team == 1 and next_x >= 20 and map.ia.safe_area[next_x][next_y] == 2) or\
-				     (obj.team == 2 and next_x < 20 and map.ia.safe_area[next_x][next_y] == 1)):
+				     ((obj.team == 1 and map.ia.safe_area[next_x][next_y] == 2) or\
+				     (obj.team == 2 and map.ia.safe_area[next_x][next_y] == 1)):
 						obj.freeze(map, next_x, next_y)
 						return 
 		if tmp_x != x or tmp_y != y:
-			print('=',self.team, tmp_x, tmp_y)
 			map.move_object(x, y, tmp_x, tmp_y)
 
 	func _handle_movement(map, x, y, influence, closer, catch_flag):
@@ -193,6 +209,7 @@ class Player:
 			condition_1 = map.ia.movement_map[next_x][next_y] >= map.ia.movement_map[tmp_x][tmp_y] and self.team == 1
 			condition_2 = map.ia.movement_map[next_x][next_y] <= map.ia.movement_map[tmp_x][tmp_y] and self.team == 2
 		return condition_1 or condition_2
+
 
 	func closer_condition(influence, next_x,next_y, tmp_x, tmp_y, closer):
 		if closer == false:
@@ -257,11 +274,6 @@ class IA:
 			for next_y in range(self.map.height):                                          
 				self.movement_map[next_x][next_y] += influence_number/pow(1+abs(next_x - x)+abs(next_y - y), 2)
 
-	func team_safe_area(player,x,y):
-		if (x < 20 and player.team == 1) or (x > 20 and player.team == 2):
-			return true
-		return false
-
 	func build_safe_area():
 		#  1 - blue time
 		#  2 - green time
@@ -308,6 +320,7 @@ class Field:
 	var last_update
 	var update_time
 	var ia
+	var flags
 
 	func _init(width=40, height=30, object=null, tile_size=20):
 		self.width = width
@@ -319,7 +332,8 @@ class Field:
 		self.update_time  = 0.2
 		self.last_update = self.update_time
 		self.create_players()
-
+		self.flags = {1: 0, 2: 0}
+	
 	func _empty_map():
 		var map = []
 		for x in range(width):
@@ -344,9 +358,14 @@ class Field:
 		var instance = self.board[x][y]
 		if typeof(instance) == TYPE_INT:
 			return
-		instance.remove_influence(x,y)
+		instance.remove_influence(self, x, y)
 		self.board[x][y] = 0
 		instance.delete(self)
+		
+	func remove_all_players():
+		for x in range(self.width):
+			for y in range(self.height):
+				self.remove_object(x,y)
 
 	func move_object(x, y , next_x, next_y):
 		var tmp = self.board[x][y]
@@ -386,11 +405,90 @@ class Field:
 				if typeof(obj) != TYPE_INT:
 					obj.update(delta, self, x, y)
 
+class Menu:
+	var object
+	var map
+	var buttons
+	
+	func _init(object, map):
+		self.object = object
+		self.map = map
+		
+		buttons = {}
+		for button_name in ['start', 'stop', 'status', 'positions', 'reset', 'edit', 'option', 'score', 'max_flags']:
+			self.buttons[button_name] = object.get_node(button_name)
+		
+		self.buttons['option'].add_item('Blue', 1)
+		self.buttons['option'].add_item('Green', 2)
+		self.buttons['option'].select(0)
+		for x in range(5, 20, 5):
+			self.buttons['max_flags'].add_item(str(x))
+	
+	func get_max_score():
+		var button = self.buttons['max_flags']
+		return int(button.get_item_text(button.get_selected()))
+	
+	func selected():
+		return self.buttons['option'].get_selected()+1
+		
+	func get_status():
+		return self.buttons['status'].get_text()
+
+	func update(delta):
+		if self.buttons['start'].is_pressed():
+			self.buttons['status'].set_text('Running ...')
+		elif self.buttons['stop'].is_pressed():
+			self.buttons['status'].set_text('Stopped ...')
+		elif self.buttons['reset'].is_pressed():
+			self.buttons['status'].set_text('Stopped ...')
+			self.map.remove_all_players()
+			self.map.flags  = {1: 0, 2: 0}
+		elif self.buttons['edit'].is_pressed():
+			self.buttons['status'].set_text('Editing ...')
+		elif self.buttons['positions'].is_pressed():
+			self.buttons['status'].set_text('Players ready ...')
+			self.map.create_players()
+		self.buttons['score'].set_text('Blue '+str(map.flags[1])+'  -  Green '+str(map.flags[2]))
+		if (self.map.flags[1] >= self.get_max_score()):
+			self.buttons['status'].set_text('The blue team won.')
+		elif self.map.flags[2] >= self.get_max_score():
+			self.buttons['status'].set_text('The green team won.')
+
+class Game:
+	var menu
+	var map
+
+	func _init(width, height, object, menu=null):
+		self.map = Field.new(width, height, object)
+		self.menu  = Menu.new(object.get_node('menu'), self.map)
+
+	func update(delta):
+		menu.update(delta)
+		if (menu.get_status() == 'Running ...'):
+			map.update(delta)
+
+	func get_status():
+		return self.menu.get_status()
+
 # GAME
-var field
+var game
 func _ready():
-	field = Field.new(40, 30, get_node('.'))
+	game = Game.new(40, 30, get_node('.'))
 	set_process(true)
+	set_process_input(true)
 
 func _process(delta):
-	field.update(delta)
+	game.update(delta)
+
+func _input(ev):
+	if (ev.type==InputEvent.MOUSE_BUTTON):
+		if ev.pressed and game.get_status() == "Editing ...":
+			var x = int(ev.pos.x) / game.map.tile_size
+			var y = int(ev.pos.y) / game.map.tile_size
+			if x > game.map.width or y > game.map.height:
+				return
+			if ev.button_index == BUTTON_LEFT:
+				var p1 = Player.new(game.menu.selected())
+				game.map.set_object(p1, x, y)
+			elif ev.button_index == BUTTON_RIGHT:
+				game.map.remove_object(x,y)
