@@ -63,14 +63,14 @@ class Player:
 		for next_x in range(map.width):
 			for next_y in range(map.height):
 				var value = self.get_influence_value(x,y, next_x,next_y) * add
-				if self.team == 1 and map.ia.safe_area[x][y] == 2:
+				if self.team == 1:
 					if self.frozen:
 						map.ia.influence.blue_frozen[next_x][next_y] += value
 					else:
 						map.ia.influence.blue[next_x][next_y] += value
 					if self.flag:
 						map.ia.influence.blue_with_flag[next_x][next_y] += value
-				elif self.team == 2 and map.ia.safe_area[x][y] == 1:
+				elif self.team == 2:
 					if self.frozen:
 						map.ia.influence.green_frozen[next_x][next_y] += value
 					else:
@@ -129,20 +129,22 @@ class Player:
 		if (self.store_flag(map, x, y) == true):
 			return
 
-		if team_area == true:
-			if options.enemies_with_flag[x][y] > 0:
+		if team_area == true: # 1 
+			if options.enemies_with_flag[x][y] > 0: # 2
 				self._go_freeze_enemy(map, x, y, options.enemies_with_flag)
-			elif options.enemies[x][y] > 0:
+			elif options.enemies[x][y] > 0: # 3
 				self._go_freeze_enemy(map, x, y, options.enemies)
-			elif options.allied_frozen[x][y] > 0 and options.enemies[x][y] == 0:
+			elif options.allied_frozen[x][y] > 0:  # 4
 				self._go_unfreeze_allied(map, x,y, options.allied_frozen)
-			else:
-				self._handle_movement(map, x, y, options.enemies, false, !self.flag)
+			else: # 6
+				self._handle_movement(map, x, y, options.enemies, false, self.flag)
 		else:
-			if options.allied_frozen[x][y] > 0 and options.enemies[x][y] == 0:
-				self._go_unfreeze_allied(map, x,y, options.allied_frozen)
-			else:
+			if options.enemies[x][y] > 0:  # 3
 				self._handle_movement(map, x, y, options.enemies, false, !self.flag)
+			if options.allied_frozen[x][y] > 0: # 4
+				self._go_unfreeze_allied(map, x,y, options.allied_frozen)
+			else:  # 6
+				self._handle_movement(map, x, y, options.enemies, false, self.flag)
 
 	func _go_unfreeze_allied(map, x, y, allied_frozen):
 		var tmp_x = x
@@ -203,11 +205,11 @@ class Player:
 		var condition_1
 		var condition_2
 		if catch_flag:
-			condition_1 = map.ia.movement_map[next_x][next_y] <= map.ia.movement_map[tmp_x][tmp_y] and self.team == 1
-			condition_2 = map.ia.movement_map[next_x][next_y] >= map.ia.movement_map[tmp_x][tmp_y] and self.team == 2
-		else:
 			condition_1 = map.ia.movement_map[next_x][next_y] >= map.ia.movement_map[tmp_x][tmp_y] and self.team == 1
 			condition_2 = map.ia.movement_map[next_x][next_y] <= map.ia.movement_map[tmp_x][tmp_y] and self.team == 2
+		else:
+			condition_1 = map.ia.movement_map[next_x][next_y] <= map.ia.movement_map[tmp_x][tmp_y] and self.team == 1
+			condition_2 = map.ia.movement_map[next_x][next_y] >= map.ia.movement_map[tmp_x][tmp_y] and self.team == 2
 		return condition_1 or condition_2
 
 
@@ -417,12 +419,15 @@ class Menu:
 		buttons = {}
 		for button_name in ['start', 'stop', 'status', 'positions', 'reset', 'edit', 'option', 'score', 'max_flags']:
 			self.buttons[button_name] = object.get_node(button_name)
-		
+
 		self.buttons['option'].add_item('Blue', 1)
 		self.buttons['option'].add_item('Green', 2)
 		self.buttons['option'].select(0)
+
 		for x in range(5, 20, 5):
 			self.buttons['max_flags'].add_item(str(x))
+
+		self.buttons['status'].set_text('Stopped ...')
 	
 	func get_max_score():
 		var button = self.buttons['max_flags']
